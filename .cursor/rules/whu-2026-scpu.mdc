@@ -1,0 +1,23 @@
+---
+description: WHU 2026 Fall Computer Organization Lab (SCPU_TOP) hardware specs and verification rules
+alwaysApply: true
+---
+
+# WHU 2026 RISC-V Single-Cycle CPU (`SCPU_TOP`) Rules
+
+1. **Clock & Debug Switch Polarity (2026 Official Manual)**:
+   - `sw_i[15] == 1`: Slow clock (`2^27` divider). `sw_i[15] == 0`: Fast clock (`2^25` divider).
+   - `sw_i[1] == 1`: Debug freeze mode (RF writes are disabled: `RFWr && (!sw_i[1]) && (A3 != 5'b0)`).
+   - `sw_i[14:11]`: Display select for `seg7x16` (`14`=ROM, `13`=RF, `12`=ALU, `11`=DM).
+
+2. **Consistent `ALUOp[4:0]` Encoding**:
+   - `ctrl.v` and `alu.v` MUST both use `5'b00011` for `ADD` (`i_add | i_addi | stype | itype_l`) and `5'b00100` for `SUB` (`i_sub`).
+
+3. **Data Memory (`dm.v`) Little-Endian & Byte-Addressed**:
+   - `reg [7:0] dmem [127:0];` with `addr[5:0]` (6-bit) and `DMType[2:0]` (3-bit).
+   - Official 12-instruction COE (`coe/test_2026.coe`) writes `sw x1, 1(x0)`, `sw x2, 2(x0)`, `sw x3, 3(x0)` with 1-byte offsets, causing intentional little-endian byte overlap (`dmem[1..4] = 01, 02, 03, 00`). Thus `lw x4, 1(x0)` MUST yield `0x00030201`, `x5 = 0x00000302`, `x6 = 0x00000003`.
+
+4. **Simulation vs Synthesis**:
+   - Use `` `ifdef SIMULATION `` in `SCPU_TOP.v` to bypass the `2^25`/`2^27` clock divider so `iverilog` / Vivado behavioral simulation advances 1 instruction per `clk` cycle.
+   - Do not change the `dist_mem_im` IP interface (`.a(rom_addr)`, `.spo(instr)`), so `src/` drops directly into Vivado.
+   - Always run `make sim` after any RTL edit and verify all assertions pass.

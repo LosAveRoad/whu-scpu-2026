@@ -1,0 +1,16 @@
+# Vivado / Simulation artifacts
+*.vvp
+*.vcd
+*.log
+*.jou
+*.pb
+*.wdb
+*.bit
+*.xpr
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+.Xil/
+.DS_Store
