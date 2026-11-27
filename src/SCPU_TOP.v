@@ -9,6 +9,11 @@ module SCPU_TOP(
 );
     wire rst = ~rstn;
 
+    // Word-address width of dist_mem_im.
+    // 6 -> depth 64, a[5:0] = PC[7:2] (task1 / beq / jal).
+    // 9 -> depth 512, a[8:0] = PC[10:2] (full Test_all.coe).
+    localparam IM_AW = 6;
+
     // 1. Clock divider: SW[15]=1 -> 2^27 (slow), SW[15]=0 -> 2^25 (fast)
     reg [31:0] clkdiv;
     always @(posedge clk or posedge rst) begin
@@ -22,21 +27,23 @@ module SCPU_TOP(
     wire Clk_CPU = sw_i[15] ? clkdiv[27] : clkdiv[25];
 `endif
 
-    // 2. Instruction address counter (12 official COE instructions: 0..11)
-    reg [5:0] rom_addr;
+    // 2. Byte-addressed PC (reset 0, sequential +4).
+    //    SW[1]=1 freezes PC (debug) as well as RF writes.
+    reg  [31:0] PC;
+    wire [31:0] pc_plus4 = PC + 32'd4;
+    wire [31:0] NPC;
+
     always @(posedge Clk_CPU or posedge rst) begin
-        if (rst) begin
-            rom_addr <= 6'd0;
-        end else if (!sw_i[1]) begin
-            if (rom_addr == 6'd11) rom_addr <= 6'd11; // Hold at end of 12-instr test
-            else                   rom_addr <= rom_addr + 6'd1;
-        end
+        if (rst)
+            PC <= 32'h0000_0000;
+        else if (!sw_i[1])
+            PC <= NPC;
     end
 
     // 3. Instruction Memory (Vivado Distributed ROM IP: dist_mem_im)
     wire [31:0] instr;
     dist_mem_im U_IM(
-        .a   (rom_addr),
+        .a   (PC[IM_AW+1:2]),
         .spo (instr)
     );
 
@@ -49,12 +56,16 @@ module SCPU_TOP(
     wire [4:0]  rd     = instr[11:7];
     wire [11:0] iimm   = instr[31:20];
     wire [11:0] simm   = {instr[31:25], instr[11:7]};
+    // B-type: {imm[12], imm[11], imm[10:5], imm[4:1], 0}
+    wire [12:0] bimm   = {instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
+    // J-type: {imm[20], imm[19:12], imm[11], imm[10:1], 0}
+    wire [20:0] jimm   = {instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
 
     // 4. Control Unit
     wire       RegWrite, MemWrite, ALUSrc;
     wire [2:0] EXTOp, DMType;
     wire [4:0] ALUOp;
-    wire [1:0] WDSel;
+    wire [1:0] WDSel, NPCOp;
 
     ctrl U_CTRL(
         .Op       (Op),
@@ -66,7 +77,8 @@ module SCPU_TOP(
         .ALUOp    (ALUOp),
         .ALUSrc   (ALUSrc),
         .DMType   (DMType),
-        .WDSel    (WDSel)
+        .WDSel    (WDSel),
+        .NPCOp    (NPCOp)
     );
 
     // 5. Immediate Extender
@@ -74,6 +86,8 @@ module SCPU_TOP(
     EXT U_EXT(
         .iimm   (iimm),
         .simm   (simm),
+        .bimm   (bimm),
+        .jimm   (jimm),
         .EXTOp  (EXTOp),
         .immout (immout)
     );
@@ -117,10 +131,18 @@ module SCPU_TOP(
         .dout   (dout)
     );
 
-    // 9. Write-Back MUX
-    assign WD = (WDSel[0]) ? dout : aluout;
+    // 9. Next PC
+    //    NPCOp 00: PC+4    01: beq (PC+imm when Zero)    10: jal (PC+imm)
+    assign NPC = (NPCOp == 2'b10)                ? (PC + immout) :
+                 (NPCOp == 2'b01 && Zero[0])     ? (PC + immout) :
+                                                   pc_plus4;
 
-    // 10. 7-Segment Display Mux (SW[14]=ROM, SW[13]=RF, SW[12]=ALU, SW[11]=DM)
+    // 10. Write-Back MUX: 00 ALU, 01 DM, 10 PC+4 (jal link)
+    assign WD = (WDSel == 2'b10) ? pc_plus4 :
+                (WDSel == 2'b01) ? dout     :
+                                   aluout;
+
+    // 11. 7-Segment Display Mux (SW[14]=ROM, SW[13]=RF, SW[12]=ALU, SW[11]=DM)
     reg [31:0] disp_data;
     always @(*) begin
         if      (sw_i[14]) disp_data = instr;

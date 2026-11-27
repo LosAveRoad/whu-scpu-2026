@@ -14,3 +14,6 @@
 *.sim/
 .Xil/
 .DS_Store
+vivado_proj/
+*.veo
+*.vho
