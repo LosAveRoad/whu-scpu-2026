@@ -10,7 +10,8 @@ module ctrl(
     output [4:0] ALUOp,
     output       ALUSrc,
     output [2:0] DMType,
-    output [1:0] WDSel
+    output [1:0] WDSel,
+    output [1:0] NPCOp
 );
     // R-type: add, sub
     wire rtype   = ~Op[6] &  Op[5] &  Op[4] & ~Op[3] & ~Op[2] & Op[1] & Op[0]; // 0110011
@@ -35,24 +36,32 @@ module ctrl(
     wire i_sh    = stype & (Funct3 == 3'b001);
     wire i_sw    = stype & (Funct3 == 3'b010);
 
+    // B-type branch: beq. J-type jump: jal.
+    wire btype   = (Op == 7'b1100011);
+    wire i_beq   = btype & (Funct3 == 3'b000);
+    wire i_jal   = (Op == 7'b1101111);
+
     // Control signals
-    assign RegWrite  = rtype | itype_r | itype_l;
+    assign RegWrite  = rtype | itype_r | itype_l | i_jal;
     assign MemWrite  = stype;
-    assign ALUSrc    = itype_r | stype | itype_l; // 0: RD2, 1: immout
-    assign WDSel[0]  = itype_l;                   // 0: ALU(C), 1: DM(dout)
-    assign WDSel[1]  = 1'b0;
+    assign ALUSrc    = itype_r | stype | itype_l; // beq compares rs1/rs2 (ALUSrc=0)
+    assign WDSel[0]  = itype_l;                   // 01: DM(dout)
+    assign WDSel[1]  = i_jal;                     // 10: PC+4
+
+    // NPCOp: 00 sequential, 01 beq (qualified by Zero), 10 jal
+    assign NPCOp     = i_jal ? 2'b10 : (i_beq ? 2'b01 : 2'b00);
 
     // ALUOp: 5'b00011 = ADD, 5'b00100 = SUB (aligned with 2026 Lecture 5 manual)
     assign ALUOp[4]  = 1'b0;
     assign ALUOp[3]  = 1'b0;
-    assign ALUOp[2]  = i_sub;
+    assign ALUOp[2]  = i_sub | i_beq;
     assign ALUOp[1]  = i_add | i_addi | stype | itype_l;
     assign ALUOp[0]  = i_add | i_addi | stype | itype_l;
 
-    // EXTOp: bit0 = S-type, bit1 = I-type
-    assign EXTOp[2]  = 1'b0;
-    assign EXTOp[1]  = itype_l | itype_r;
-    assign EXTOp[0]  = stype;
+    // EXTOp: 001 S-type, 010 I-type, 011 B-type, 100 J-type
+    assign EXTOp[2]  = i_jal;
+    assign EXTOp[1]  = itype_l | itype_r | i_beq;
+    assign EXTOp[0]  = stype | i_beq;
 
     // DMType: 000=lw/sw, 001=lh/sh, 010=lhu, 011=lb/sb, 100=lbu
     assign DMType[2] = i_lbu;
