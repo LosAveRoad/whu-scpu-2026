@@ -17,7 +17,11 @@ alwaysApply: true
    - `reg [7:0] dmem [127:0];` with `addr[5:0]` (6-bit) and `DMType[2:0]` (3-bit).
    - Official 12-instruction COE (`coe/test_2026.coe`) writes `sw x1, 1(x0)`, `sw x2, 2(x0)`, `sw x3, 3(x0)` with 1-byte offsets, causing intentional little-endian byte overlap (`dmem[1..4] = 01, 02, 03, 00`). Thus `lw x4, 1(x0)` MUST yield `0x00030201`, `x5 = 0x00000302`, `x6 = 0x00000003`.
 
-4. **Simulation vs Synthesis**:
+4. **Simulation vs Synthesis & Checkoff Tasks**:
+   - See `docs/CHECKOFF_REQUIREMENTS.md` for the 3 checkoff tiers:
+     - **Task 1 (baseline)**: 12-instruction sequential execution (`coe/test_2026.coe`) + `SW[14:11]` module display switching.
+     - **Task 2 (higher bonus)**: One **B-type** branch instruction (`beq`/`bne`/`blt`/`bge`/`bltu`/`bgeu`) using `coe/Test_all.coe` (or filtered subset) with proper byte-addressed `PC` branching.
+     - **Task 3 (highest bonus)**: One **J-type** jump instruction (`jal` or `jalr`) using `coe/Test_all.coe` (or filtered subset) with `PC` jump and `PC + 4` writeback to `rd` (`WDSel = 2'b10`).
    - Use `` `ifdef SIMULATION `` in `SCPU_TOP.v` to bypass the `2^25`/`2^27` clock divider so `iverilog` / Vivado behavioral simulation advances 1 instruction per `clk` cycle.
-   - Do not change the `dist_mem_im` IP interface (`.a(rom_addr)`, `.spo(instr)`), so `src/` drops directly into Vivado.
+   - Do not change the `dist_mem_im` IP interface (`.a(...)`, `.spo(instr)`), so `src/` drops directly into Vivado.
    - Always run `make sim` after any RTL edit and verify all assertions pass.

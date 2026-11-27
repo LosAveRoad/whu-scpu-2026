@@ -8,7 +8,10 @@
   - `SCPU_TOP.v`（顶层单步串行 CPU，含 `SW[15]` 快慢时钟与 `SW[1]` 调试锁）
   - `ctrl.v`（已补全 `stype`/`i_sw` 并修正 `i_sh` 的 `&`）
   - `EXT.v`、`RF.v`、`alu.v`、`dm.v`、`seg7x16.v`
-- `coe/test_2026.coe`：2026 官方 12 条测试指令机器码
+- `coe/`：
+  - `test_2026.coe`：任务 1（四模块顺序执行）官方 12 条测试指令机器码
+  - `Test_all.coe`：任务 2（B 指令跳转）/ 任务 3（J 指令跳转）全指令核文件（277 条）
+- `docs/CHECKOFF_REQUIREMENTS.md`：**最新验收通知、三大任务加分标准、`Test_all.coe` 分块索引及实验报告格式规范**
 - `sim/`：`iverilog` / Linux 仿真桩（`dist_mem_im_stub.v`）与自检测试平台（`SCPU_TOP_tb.v`）
 - `constraints/`：NEXYS4 物理引脚 `.xdc` 放置说明
 
